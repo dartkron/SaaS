@@ -1,0 +1,8 @@
+{
+"port": "8081",
+"JSONUrl": "http://2ch.hk/b/index.json",
+"downloadURL": "http://2ch.hk/b/",
+"browserUserAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:41.0) Gecko/20100101 Firefox/41.0",
+"cookie": "d418938161cfd6b76346dbc5f646727641444860420",
+"saveDirectory": "webm"
+}
