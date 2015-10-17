@@ -164,7 +164,7 @@ func (p *HTTPPlayer) refrestFileCache() {
 	if err != nil {
 		log.Println("Error on read directory for save files: ", err)
 	}
-	p.cachedFiles.RLock()
+	p.cachedFiles.RLock()https://github.com/ValdikSS/endless-sosuch
 	p.cachedFiles.files = make(map[string]string)
 	for _, file := range cacheDir {
 		p.cachedFiles.files[file.Name()] = p.Config.SaveDirectory + string(os.PathSeparator) + file.Name()
@@ -341,7 +341,7 @@ func (p *HTTPPlayer) ListenAndServe() error {
 		<div id="header" style="width:100%;text-align: center;">
 		<h1>SaaS - Sosach as a Service</h1>
 		<h3>Endless webm flow from 2ch.hk in your browser</h3>
-		<a class="github-ribbon" href="https://github.com/zenwalker/golang-book"><img style="position: absolute; top: 0; left: 0; border: 0;" src="https://camo.githubusercontent.com/567c3a48d796e2fc06ea80409cc9dd82bf714434/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f6c6566745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_left_darkblue_121621.png"></a>
+		<a class="github-ribbon" href="https://github.com/dartkron/SaaS"><img style="position: absolute; top: 0; left: 0; border: 0;" src="https://camo.githubusercontent.com/567c3a48d796e2fc06ea80409cc9dd82bf714434/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f6c6566745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_left_darkblue_121621.png"></a>
 		</div>
 		<div id="player" style="width:100%; text-align: center;">
 		    <video style="height:80%" id="video_player" controls autoplay src="play/"> Your user agent does not support the HTML5 Video element. </video><br/> 
