@@ -43,8 +43,9 @@ type HTTPPlayer struct {
 }
 
 type sessionType struct {
-	position int
-	created  time.Time
+	position          int
+	created           time.Time
+	effectivePosition int
 }
 
 // Function to create Player and fill all necessary fields
@@ -118,7 +119,7 @@ func (p *HTTPPlayer) newSession(resp *http.ResponseWriter) (string, error) {
 			if position < 0 {
 				position = 0
 			}
-			p.sessionsControl.sessions[sessionID] = sessionType{position, time.Now()}
+			p.sessionsControl.sessions[sessionID] = sessionType{position, time.Now(), position}
 			break
 		}
 	}
@@ -203,13 +204,23 @@ func (p *HTTPPlayer) sessionMovePos(sessionID string, move int) int {
 	p.sessionsControl.RLock()
 	defer p.sessionsControl.RUnlock()
 	if p.sessionsControl.sessions[sessionID].position+move < 0 || p.sessionsControl.sessions[sessionID].position+move > length-1 {
-		return rand.Intn(length)
+		session := p.sessionsControl.sessions[sessionID]
+		session.effectivePosition = rand.Intn(length)
+		p.sessionsControl.sessions[sessionID] = session
+		return p.sessionsControl.sessions[sessionID].effectivePosition
 	} else {
 		session := p.sessionsControl.sessions[sessionID]
 		session.position += move
+		session.effectivePosition = session.position
 		p.sessionsControl.sessions[sessionID] = session
 		return p.sessionsControl.sessions[sessionID].position
 	}
+}
+
+func (p *HTTPPlayer) getEffectivePosition(sessionID string) int {
+	p.sessionsControl.RLock()
+	defer p.sessionsControl.RUnlock()
+	return p.sessionsControl.sessions[sessionID].effectivePosition
 }
 
 //Function responds to /play/info requests
@@ -219,8 +230,8 @@ func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Println("Error while handling session: ", err)
 	}
-	position := p.sessionMovePos(sessionID, 0)
-	log.Println("sessionID ", sessionID, " have position ", position, ". Queue for this position is ", p.sosach.Queue[position])
+	position := p.getEffectivePosition(sessionID)
+	log.Println("sessionID ", sessionID, " have effective position ", position, ". Queue for this position is ", p.sosach.Queue[position])
 	fileInfo, err := json.Marshal(p.sosach.Queue[position])
 	if err != nil {
 		log.Println("Error while marshaling file info: ", err)

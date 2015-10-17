@@ -47,7 +47,7 @@ func main() {
 
 	player, err := HTTPPlayer.NewHTTPPlayer(config.SaveDirectory, config.Cookie, config.BrowserUserAgent, config.DownloadURL, config.JSONUrl, config.Port)
 	if err != nil {
-		log.Fatalln("")
+		log.Fatalln("Error on creating HTTP Player: ", err)
 	}
 
 	player.ListenAndServe()
