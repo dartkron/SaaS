@@ -39,8 +39,7 @@ type HTTPPlayer struct {
 		sync.RWMutex
 		files map[string]string
 	}
-	sosach          *board.Board
-	defaultPosition int
+	sosach *board.Board
 }
 
 type sessionType struct {
@@ -115,7 +114,11 @@ func (p *HTTPPlayer) newSession(resp *http.ResponseWriter) (string, error) {
 		p.sessionsControl.RLock()
 		defer p.sessionsControl.RUnlock()
 		if _, ok := p.sessionsControl.sessions[sessionID]; !ok {
-			p.sessionsControl.sessions[sessionID] = sessionType{p.defaultPosition, time.Now()}
+			position := len(p.sosach.Queue) - 10
+			if position < 0 {
+				position = 0
+			}
+			p.sessionsControl.sessions[sessionID] = sessionType{position, time.Now()}
 			break
 		}
 	}
