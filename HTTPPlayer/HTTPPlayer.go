@@ -101,6 +101,8 @@ func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, DownloadURL, JSONUrl
 		}
 	}
 
+	go player.startSessionsCleaner()
+
 	return player, nil
 }
 
@@ -164,7 +166,7 @@ func (p *HTTPPlayer) refrestFileCache() {
 	if err != nil {
 		log.Println("Error on read directory for save files: ", err)
 	}
-	p.cachedFiles.RLock()https://github.com/ValdikSS/endless-sosuch
+	p.cachedFiles.RLock()
 	p.cachedFiles.files = make(map[string]string)
 	for _, file := range cacheDir {
 		p.cachedFiles.files[file.Name()] = p.Config.SaveDirectory + string(os.PathSeparator) + file.Name()
@@ -207,6 +209,7 @@ func (p *HTTPPlayer) sessionMovePos(sessionID string, move int) int {
 	}
 }
 
+//Function responds to /play/info requests
 func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request) {
 	sessionID, err := p.getRequestSession(&resp, req)
 	log.Println("Request info with sessionID ", sessionID)
@@ -224,6 +227,23 @@ func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request) {
 	resp.Header().Add("Content-Type", "application/json")
 
 	resp.Write(fileInfo)
+}
+
+// Function to initiate old sessions cleaner
+func (p *HTTPPlayer) startSessionsCleaner() {
+	for {
+		time.Sleep(1 * time.Hour)
+		log.Println("Started old sessions cleaner")
+		p.sessionsControl.RLock()
+		for key, session := range p.sessionsControl.sessions {
+			if time.Since(session.created) > 12*time.Hour {
+				log.Println("Found old session ", key)
+				delete(p.sessionsControl.sessions, key)
+			}
+		}
+		p.sessionsControl.RUnlock()
+		log.Println("Old sessions cleander stoped")
+	}
 }
 
 func (p *HTTPPlayer) servePlay(resp *http.ResponseWriter, sessionID string, move int) error {
