@@ -84,10 +84,10 @@ func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, DownloadURL, JSONUrl
 	player.sosach.AutoWatcher()
 
 	// Check if cache directory exist and create it not. If indicated path is file istead of directory, show alert and stop
-	dir, err := os.Stat(player.Config.SaveDirectory)
+	dir, err := os.Stat(player.Config.SaveDirectory + string(os.PathSeparator) + "src")
 	if err != nil {
 		log.Println("Could not stat directory for saving webm. Trying create a new one.")
-		err := os.Mkdir(player.Config.SaveDirectory, 0755)
+		err := os.MkdirAll(player.Config.SaveDirectory+string(os.PathSeparator)+"src", 0755)
 		if err != nil {
 			return player, err
 		} else {
@@ -224,14 +224,8 @@ func (p *HTTPPlayer) getEffectivePosition(sessionID string) int {
 }
 
 //Function responds to /play/info requests
-func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request) {
-	sessionID, err := p.getRequestSession(&resp, req)
-	log.Println("Request info with sessionID ", sessionID)
-	if err != nil {
-		log.Println("Error while handling session: ", err)
-	}
-	position := p.getEffectivePosition(sessionID)
-	log.Println("sessionID ", sessionID, " have effective position ", position, ". Queue for this position is ", p.sosach.Queue[position])
+func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request, position int) {
+
 	fileInfo, err := json.Marshal(p.sosach.Queue[position])
 	if err != nil {
 		log.Println("Error while marshaling file info: ", err)
@@ -260,9 +254,14 @@ func (p *HTTPPlayer) startSessionsCleaner() {
 	}
 }
 
-func (p *HTTPPlayer) servePlay(resp *http.ResponseWriter, sessionID string, move int) error {
+func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 
-	position := p.sessionMovePos(sessionID, move)
+	sessionID, err := p.getRequestSession(&resp, req)
+	if err != nil {
+		log.Println("Error happened during session handling: ", err)
+	}
+
+	position := p.getEffectivePosition(sessionID)
 
 	filePath := p.getFileFromCache(p.sosach.Queue[position].Name)
 
@@ -297,20 +296,61 @@ func (p *HTTPPlayer) servePlay(resp *http.ResponseWriter, sessionID string, move
 
 		defer outerResp.Body.Close()
 
-		multiWrite := io.MultiWriter(file, *resp)
+		resp.Header().Add("Last-Modified", outerResp.Header.Get("Last-Modified"))
+		resp.Header().Add("Expires", time.Now().Add(8760*time.Hour).Format(time.RFC1123))
+		resp.Header().Add("Cache-Control", "public, max-age=16070400")
+
+		multiWrite := io.MultiWriter(file, resp)
 
 		bytesCount, err := io.Copy(multiWrite, outerResp.Body)
 		if err != nil {
 			log.Println("Error while downloading/uploading: ", err)
 			os.Remove(file.Name())
 		} else {
-			err = os.Rename(file.Name(), p.Config.SaveDirectory+string(os.PathSeparator)+p.sosach.Queue[position].Name)
+
+			// Check if cache directory exist and create it not. If indicated path is file istead of directory, show alert and stop
+			dir, err := os.Stat(p.Config.SaveDirectory + string(os.PathSeparator) + "src" + string(os.PathSeparator) + p.sosach.Queue[position].Thread)
 			if err != nil {
-				log.Println("Error on saving file to cache: ", err)
-			} else {
-				p.addFileToCache(p.sosach.Queue[position].Name, p.Config.SaveDirectory+string(os.PathSeparator)+p.sosach.Queue[position].Name)
+				log.Println("Could not stat directory for saving webm. Trying create a new one.")
+				err := os.MkdirAll(p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread, 0755)
+				if err != nil {
+					log.Println("Could not create cache directory: ", err)
+					os.Remove(file.Name())
+				} else {
+					log.Println("Creating new directory ", p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread)
+					dir, _ = os.Stat(p.Config.SaveDirectory + string(os.PathSeparator) + "src" + string(os.PathSeparator) + p.sosach.Queue[position].Thread)
+				}
 			}
 
+			if !dir.IsDir() {
+				log.Println("Error during save file to cache: indicated path not a directory.")
+				os.Remove(file.Name())
+			} else {
+				err = os.Rename(file.Name(), p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread+string(os.PathSeparator)+p.sosach.Queue[position].Name)
+				if err != nil {
+					log.Println("Error on saving file to cache: ", err)
+				} else {
+
+					// Update modified time, to avoid reuploading to cache
+					modifiedTime, err := time.Parse(time.RFC1123, outerResp.Header.Get("Last-Modified"))
+
+					if err != nil {
+						log.Println("Error on parsing \"Last-Modified\" header from board response: ", err)
+					} else {
+						os.Chtimes(p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread+string(os.PathSeparator)+p.sosach.Queue[position].Name, modifiedTime, modifiedTime)
+					}
+					//Add file to files cache map
+					p.addFileToCache(p.sosach.Queue[position].Name, p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread+string(os.PathSeparator)+p.sosach.Queue[position].Name)
+
+					//Change file permissions to allow Nginx or someone access file
+					err = os.Chmod(p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread+string(os.PathSeparator)+p.sosach.Queue[position].Name, 0777)
+					if err != nil {
+						log.Println("Something very strange: error during changing permissions on new file: ", err)
+					}
+
+				}
+
+			}
 		}
 
 		log.Println(bytesCount, "bytes downloaded/uploaded.")
@@ -321,13 +361,23 @@ func (p *HTTPPlayer) servePlay(resp *http.ResponseWriter, sessionID string, move
 
 		}
 		defer file.Close()
-		bytesCount, err := io.Copy(*resp, file)
+
+		fileStat, err := file.Stat()
+		if err != nil {
+			log.Println("Error on stat file: ", err)
+		} else {
+			resp.Header().Add("Last-Modified", fileStat.ModTime().Format(time.RFC1123))
+		}
+
+		resp.Header().Add("Expires", time.Now().Add(8760*time.Hour).Format(time.RFC1123))
+		resp.Header().Add("Cache-Control", "public, max-age=16070400")
+
+		bytesCount, err := io.Copy(resp, file)
 		if err != nil {
 			log.Println("Error while uploading: ", err)
 		}
 		log.Println(bytesCount, "bytes uploaded.")
 	}
-	return nil
 }
 
 func (p *HTTPPlayer) Play(resp http.ResponseWriter, req *http.Request) {
@@ -356,15 +406,19 @@ func (p *HTTPPlayer) Play(resp http.ResponseWriter, req *http.Request) {
 		move = -10
 	}
 
-	err = p.servePlay(&resp, sessionID, move)
-	if err != nil {
-		log.Println("error on playing webm ", err)
-	}
+	position := p.sessionMovePos(sessionID, move)
+	p.getWebmInfo(resp, req, position)
+
+	/*
+		err = p.servePlay(resp, sessionID, move)
+		if err != nil {
+			log.Println("error on playing webm ", err)
+		}*/
 }
 
 func (p *HTTPPlayer) ListenAndServe() error {
 
-	http.HandleFunc("/play/info", p.getWebmInfo)
+	http.HandleFunc("/play/"+p.Config.SaveDirectory+"/", p.servePlay)
 
 	http.HandleFunc("/play/", p.Play)
 
@@ -422,13 +476,14 @@ func (p *HTTPPlayer) ListenAndServe() error {
 		
 		    function updateVideoInfo () {
 				info = JSON.parse(document.getElementById("hidden").innerHTML);
-				document.getElementById("info").innerHTML = "Link to original video: <a href=\"https://2ch.hk/b/"+info.path+"\">https://2ch.hk/b/"+info.path+"</a><br/>Link to original post: <a href=\"https://2ch.hk/b/res/"+info.thread+".html#"+info.post+"\">https://2ch.hk/b/res"+info.thread+".html#"+info.post+"</a>";
-				}
+				document.getElementById("info").innerHTML = "Link to original video: <a href=\"https://2ch.hk/b/"+info.path+"\">https://2ch.hk/b/"+info.path+"</a><br/>Link to original post: <a href=\"https://2ch.hk/b/res/"+info.thread+".html#"+info.post+"\">https://2ch.hk/b/res"+info.thread+".html#"+info.post+"</a>";				
+				document.getElementById('video_player').src='play/` + p.Config.SaveDirectory + `/'+info.path;
+			}
 			
-			function playNext10() { document.getElementById('video_player').src='play/next10'; setTimeout('loadXMLDoc("hidden","/play/info",updateVideoInfo)',500);}
-			function playNext() { document.getElementById('video_player').src='play/next'; setTimeout('loadXMLDoc("hidden","/play/info",updateVideoInfo)',500);}
-			function playPrev() { document.getElementById('video_player').src='play/prev'; setTimeout('loadXMLDoc("hidden","/play/info",updateVideoInfo)',500);} 
-			function playPrev10() { document.getElementById('video_player').src='play/prev10'; setTimeout('loadXMLDoc("hidden","/play/info",updateVideoInfo)',500);} 
+			function playNext10() { loadXMLDoc("hidden","/play/next10",updateVideoInfo);}
+			function playNext() { loadXMLDoc("hidden","/play/next",updateVideoInfo);}
+			function playPrev() { loadXMLDoc("hidden","/play/prev",updateVideoInfo);} 
+			function playPrev10() { loadXMLDoc("hidden","/play/prev10",updateVideoInfo);} 
 			function playPause() { if (document.getElementById('video_player').paused) {document.getElementById('video_player').play();} else {document.getElementById('video_player').pause()}} 
 			function myHandler(e) {  
 			playNext() 
