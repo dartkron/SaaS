@@ -485,9 +485,7 @@ func (p *HTTPPlayer) ListenAndServe() error {
 			function playPrev() { loadXMLDoc("hidden","/play/prev",updateVideoInfo);} 
 			function playPrev10() { loadXMLDoc("hidden","/play/prev10",updateVideoInfo);} 
 			function playPause() { if (document.getElementById('video_player').paused) {document.getElementById('video_player').play();} else {document.getElementById('video_player').pause()}} 
-			function myHandler(e) {  
-			playNext() 
-			} 
+
 			function keyPressHandler(e) { 
 			console.log(e.key); 
 			if ((e.keyCode == 66) || (e.keyCode == 98) || (e.keyCode == 1048) || (e.keyCode == 1080) || (e.key == 'b') || (e.key == 'B') || (e.key == 'и') || (e.key == 'И')) { playNext(); } 
@@ -499,7 +497,8 @@ func (p *HTTPPlayer) ListenAndServe() error {
 			document.addEventListener('DOMContentLoaded', function () { 
 			setTimeout(loadXMLDoc("hidden","/play/info",updateVideoInfo),1500)
 			window.addEventListener('keypress', keyPressHandler, false); 
-			document.getElementById('video_player').addEventListener('ended',myHandler,false); 
+			document.getElementById('video_player').addEventListener('ended',function (e) {playNext();},false); 
+			document.getElementById('video_player').addEventListener('error',function (e) {playNext();},false)
 			}); 
 			</script>`
 		io.WriteString(resp, pageContent)
