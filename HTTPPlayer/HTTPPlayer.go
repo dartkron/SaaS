@@ -409,6 +409,10 @@ func (p *HTTPPlayer) Play(resp http.ResponseWriter, req *http.Request) {
 	position := p.sessionMovePos(sessionID, move)
 	p.getWebmInfo(resp, req, position)
 
+	log.Println("Reuqest with sessionID: ", sessionID)
+	log.Println("Queue position: ", position)
+	log.Println("Queue length: ", len(p.sosach.Queue))
+
 	/*
 		err = p.servePlay(resp, sessionID, move)
 		if err != nil {
@@ -426,13 +430,37 @@ func (p *HTTPPlayer) ListenAndServe() error {
 		resp.Header().Set("Content-Type", "text/html")
 		resp.Header().Set("charset", "utf-8")
 		pageContent := `
-		<div id="header" style="width:100%;text-align: center;">
+		<head>
+		  <style type="text/css">
+		    .black {
+				color: white;
+				background: black;
+			}	
+		    .black A {
+				color: #C9BE89;
+                text-decoration: none;    
+			}	
+			#header {
+				width:100%;
+				text-align: center;
+			}
+			#player {
+				width:100%; 
+				text-align: center;
+			}
+			#video_player {
+				height:80%;			
+			}
+		  </style>
+		</head>
+		<body class="black">
+		<div id="header">
 		<h1>SaaS - Sosach as a Service</h1>
 		<h3>Endless webm flow from 2ch.hk in your browser</h3>
 		<a class="github-ribbon" href="https://github.com/dartkron/SaaS"><img style="position: absolute; top: 0; left: 0; border: 0;" src="https://camo.githubusercontent.com/567c3a48d796e2fc06ea80409cc9dd82bf714434/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f6c6566745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_left_darkblue_121621.png"></a>
 		</div>
-		<div id="player" style="width:100%; text-align: center;">
-		    <video style="height:80%" id="video_player" controls autoplay src="play/"> Your user agent does not support the HTML5 Video element. </video><br/> 
+		<div id="player">
+		    <video id="video_player" controls autoplay > Your user agent does not support the HTML5 Video element. </video><br/> 
 			<input id="Prev10" type="button" value="Prev10(z)" onclick="playPrev10()" /> 
 			<input id="Prev" type="button" value="Prev(x)" onclick="playPrev()" /> 
 			<input id="Next" type="button" value="Next(b)" onclick="playNext()" /> 
