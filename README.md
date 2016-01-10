@@ -3,7 +3,7 @@
 _Оригинальная идея принадлежит VadikSS_ https://github.com/ValdikSS/endless-sosuch
 
 **Поток webm из Харкача(2ch.hk) прямо в вашем браузе. Бесплатно и без СМС.**  
-Демо запущенно на https://2ch-webm.club/
+Демо запущенно на https://2ch-webm.club/  
 Приложение представляет из себя демона написанно на Golang, который можно запустить на своём ПК или же на сервере в локальной или глобальной сети.
 Приложение состоит из двух логических компонентов: 
 
@@ -30,7 +30,7 @@ _Оригинальная идея принадлежит VadikSS_ https://githu
 _Originally idea of VadikSS_ https://github.com/ValdikSS/endless-sosuch
 
 **Endless webm flow from 2ch.hk now right in your browser. Free of charge.**  
-Demo run on https://2ch-webm.club/
+Demo run on https://2ch-webm.club/  
 Application itself is a daemon wrote on Golang, which could be started on your PC or on a local server or on server in Internet.
 Logically application consider two parts:
 
