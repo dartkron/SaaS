@@ -20,7 +20,7 @@ _Оригинальная идея принадлежит VadikSS_ https://githu
 * **z** для возврата на 10 видео назад
 
 ### Как конфигурировать
-Скопируйте User-Agent и cookie "__cfduid" из своего браузера в config.json и запустите SaaS. 
+Скопируйте User-Agent, cookie "__cfduid" и cookie "cf_clearance" из своего браузера в config.json и запустите SaaS. 
 Перейти по адресу http://localhost:8081 и попробовать оторваться.
 
 --------------------------------------------
@@ -48,6 +48,6 @@ Each part could be used as a golang-package
 * **z** to get 10 videous back
 
 ### How to use
-Copy your User-Agent and "__cfduid" cookie to config.json and run SaaS.
+Copy your User-Agent, "__cfduid" and "cf_clearance" cookies to config.json and run SaaS.
 Follow to http://localhost:8081 and try to drop it out.
 

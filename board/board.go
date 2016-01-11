@@ -68,6 +68,7 @@ type Board struct {
 		DownloadURL      string
 		BrowserUserAgent string
 		Cookie           string
+		Cookieclearance  string
 	}
 
 	// Regexp to check if thread is a WEBM-thread
@@ -146,6 +147,7 @@ func (b *Board) getUrl(URL string) (response []byte, err error) {
 
 	req.Header.Set("User-Agent", b.config.BrowserUserAgent)
 	req.AddCookie(&http.Cookie{Name: "__cfduid", Value: b.config.Cookie})
+	req.AddCookie(&http.Cookie{Name: "cf_clearance", Value: b.config.Cookieclearance})
 
 	resp, err := client.Do(req)
 	if err != nil {
