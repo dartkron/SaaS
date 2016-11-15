@@ -2,6 +2,7 @@
 "port": "8081",
 "JSONUrl": "http://2ch.hk/b/index.json",
 "downloadURL": "http://2ch.hk/b/",
+"boardAddress": "http://2ch.hk/",
 "browserUserAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.73 YaBrowser/16.2.0.1818 (beta) Yowser/2.5 Safari/537.36",
 "cookie": "d6a30d75ce1b76df067a62a91a2df19f11443993936",
 "cookieclearance": "6e1def12b31f37dda3f9379c478278e0325e4150-1452461364-2592000",

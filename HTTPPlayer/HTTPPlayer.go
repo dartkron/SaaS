@@ -27,6 +27,7 @@ type HTTPPlayer struct {
 		Cookie           string
 		BrowserUserAgent string
 		DownloadURL      string
+		BoardAddress     string
 		Port             string
 		Tempdir          string
 	}
@@ -49,7 +50,7 @@ type sessionType struct {
 }
 
 // Function to create Player and fill all necessary fields
-func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, DownloadURL, JSONUrl, Port string) (*HTTPPlayer, error) {
+func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, BoardAddress, DownloadURL, JSONUrl, Port string) (*HTTPPlayer, error) {
 	player := new(HTTPPlayer)
 
 	// init sessions map
@@ -68,6 +69,7 @@ func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, DownloadURL, JSONUrl
 	player.Config.Cookie = Cookie
 	player.Config.BrowserUserAgent = BrowserUserAgent
 	player.Config.DownloadURL = DownloadURL
+	player.Config.BoardAddress = BoardAddress
 	player.Config.Port = Port
 	player.Config.Tempdir = tempdir
 
@@ -268,9 +270,9 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 	if filePath == "" {
 
 		client := &http.Client{}
-		log.Println(p.Config.DownloadURL+p.sosach.Queue[position].Name, " not in cache, making following request: ", p.Config.DownloadURL+p.sosach.Queue[position].Path)
+		log.Println(p.Config.DownloadURL+p.sosach.Queue[position].Name, " not in cache, making following request: ", p.Config.BoardAddress+p.sosach.Queue[position].Path)
 
-		outReq, err := http.NewRequest("GET", p.Config.DownloadURL+p.sosach.Queue[position].Path, nil)
+		outReq, err := http.NewRequest("GET", p.Config.BoardAddress+p.sosach.Queue[position].Path, nil)
 		if err != nil {
 			log.Println("Error on creating outgoing request ", err)
 			log.Println("Removing ", p.sosach.Queue[position].Name, " from queue")

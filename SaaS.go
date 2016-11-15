@@ -15,6 +15,7 @@ import (
 type configFile struct {
 	Port             string
 	JSONUrl          string
+	BoardAddress     string
 	DownloadURL      string
 	BrowserUserAgent string
 	Cookie           string
@@ -45,7 +46,7 @@ func main() {
 		log.Fatalln("Error on reading config file: ", err)
 	}
 
-	player, err := HTTPPlayer.NewHTTPPlayer(config.SaveDirectory, config.Cookie, config.BrowserUserAgent, config.DownloadURL, config.JSONUrl, config.Port)
+	player, err := HTTPPlayer.NewHTTPPlayer(config.SaveDirectory, config.Cookie, config.BrowserUserAgent, config.BoardAddress, config.DownloadURL, config.JSONUrl, config.Port)
 	if err != nil {
 		log.Fatalln("Error on creating HTTP Player: ", err)
 	}
