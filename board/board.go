@@ -101,7 +101,7 @@ func NewBoard(JSONUrl, DownloadURL, BrowserUserAgent, Cookie string) (*Board, er
 	}
 
 	//Precompile regexp's for parsing threads content
-	board.threadWebmRegexp = regexp.MustCompile("([Ww][Ee][Bb].*[Mm])|([Цц][Уу][ИЙйи].*[Ьь])")
+	board.threadWebmRegexp = regexp.MustCompile("([ШшWw][EeЕе][BbБб].*[MmМм])|([Цц][Уу][ИЙйи].*[Ьь])")
 	board.filenameWebmRegexp = regexp.MustCompile(".webm$")
 
 	//Struct to store target threads view
@@ -138,7 +138,6 @@ func (b *Board) getCFCookie(URL string) error {
 
 // function make GET request with UserAgent and CloudFlare cookie from config variable.
 func (b *Board) getUrl(URL string) (response []byte, err error) {
-	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
@@ -149,7 +148,7 @@ func (b *Board) getUrl(URL string) (response []byte, err error) {
 	req.AddCookie(&http.Cookie{Name: "__cfduid", Value: b.config.Cookie})
 	req.AddCookie(&http.Cookie{Name: "cf_clearance", Value: b.config.Cookieclearance})
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

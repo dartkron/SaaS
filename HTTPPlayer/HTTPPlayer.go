@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,12 +33,12 @@ type HTTPPlayer struct {
 		Tempdir          string
 	}
 	sessionsControl struct {
-		sync.RWMutex
+		sync.Mutex
 		sessions map[string]sessionType
 	}
 
 	cachedFiles struct {
-		sync.RWMutex
+		sync.Mutex
 		files map[string]string
 	}
 	sosach *board.Board
@@ -54,9 +55,9 @@ func NewHTTPPlayer(SaveDirectory, Cookie, BrowserUserAgent, BoardAddress, Downlo
 	player := new(HTTPPlayer)
 
 	// init sessions map
-	player.sessionsControl.RLock()
+	player.sessionsControl.Lock()
 	player.sessionsControl.sessions = make(map[string]sessionType)
-	player.sessionsControl.RUnlock()
+	player.sessionsControl.Unlock()
 
 	// Pre-creation of tmp dir, due a bug in Golang https://github.com/golang/go/issues/6842
 	tempdir, err := ioutil.TempDir("", "sosach_webm")
@@ -114,8 +115,8 @@ func (p *HTTPPlayer) newSession(resp *http.ResponseWriter) (string, error) {
 	for {
 		sessionID = strconv.Itoa(int(time.Now().Unix())) + strconv.Itoa(int(rand.Int63()))
 
-		p.sessionsControl.RLock()
-		defer p.sessionsControl.RUnlock()
+		p.sessionsControl.Lock()
+		defer p.sessionsControl.Unlock()
 		if _, ok := p.sessionsControl.sessions[sessionID]; !ok {
 			position := len(p.sosach.Queue) - 10
 			if position < 0 {
@@ -133,8 +134,8 @@ func (p *HTTPPlayer) newSession(resp *http.ResponseWriter) (string, error) {
 
 // Function to get session via sessionID
 func (p *HTTPPlayer) getSession(sessionID string) (sessionType, error) {
-	p.sessionsControl.RLock()
-	defer p.sessionsControl.RUnlock()
+	p.sessionsControl.Lock()
+	defer p.sessionsControl.Unlock()
 	if session, ok := p.sessionsControl.sessions[sessionID]; !ok {
 		return session, errors.New("No such session")
 	} else {
@@ -172,19 +173,19 @@ func (p *HTTPPlayer) refrestFileCache() {
 	if err != nil {
 		log.Println("Error on read directory for save files: ", err)
 	}
-	p.cachedFiles.RLock()
+	p.cachedFiles.Lock()
+	defer p.cachedFiles.Unlock()
 	p.cachedFiles.files = make(map[string]string)
 	for _, file := range cacheDir {
 		p.cachedFiles.files[file.Name()] = p.Config.SaveDirectory + string(os.PathSeparator) + file.Name()
 	}
 
-	p.cachedFiles.RUnlock()
 }
 
 // Function to check if target file already in cache and return path, otherwise return empty string
 func (p *HTTPPlayer) getFileFromCache(file string) string {
-	p.cachedFiles.RLock()
-	defer p.cachedFiles.RUnlock()
+	p.cachedFiles.Lock()
+	defer p.cachedFiles.Unlock()
 
 	if path, ok := p.cachedFiles.files[file]; ok {
 		return path
@@ -195,16 +196,19 @@ func (p *HTTPPlayer) getFileFromCache(file string) string {
 
 // Function to add file to cache map
 func (p *HTTPPlayer) addFileToCache(name, path string) {
-	p.cachedFiles.RLock()
-	defer p.cachedFiles.RUnlock()
+	p.cachedFiles.Lock()
+	defer p.cachedFiles.Unlock()
+	if p.cachedFiles.files == nil {
+		p.cachedFiles.files = make(map[string]string)
+	}
 	p.cachedFiles.files[name] = path
 }
 
 // Function to handle move position on queue
 func (p *HTTPPlayer) sessionMovePos(sessionID string, move int) int {
 	length := len(p.sosach.Queue)
-	p.sessionsControl.RLock()
-	defer p.sessionsControl.RUnlock()
+	p.sessionsControl.Lock()
+	defer p.sessionsControl.Unlock()
 	if p.sessionsControl.sessions[sessionID].position+move < 0 || p.sessionsControl.sessions[sessionID].position+move > length-1 {
 		session := p.sessionsControl.sessions[sessionID]
 		session.effectivePosition = rand.Intn(length)
@@ -220,8 +224,8 @@ func (p *HTTPPlayer) sessionMovePos(sessionID string, move int) int {
 }
 
 func (p *HTTPPlayer) getEffectivePosition(sessionID string) int {
-	p.sessionsControl.RLock()
-	defer p.sessionsControl.RUnlock()
+	p.sessionsControl.Lock()
+	defer p.sessionsControl.Unlock()
 	return p.sessionsControl.sessions[sessionID].effectivePosition
 }
 
@@ -235,7 +239,6 @@ func (p *HTTPPlayer) getWebmInfo(resp http.ResponseWriter, req *http.Request, po
 	}
 
 	resp.Header().Add("Content-Type", "application/json")
-
 	resp.Write(fileInfo)
 }
 
@@ -244,14 +247,14 @@ func (p *HTTPPlayer) startSessionsCleaner() {
 	for {
 		time.Sleep(1 * time.Hour)
 		log.Println("Started old sessions cleaner")
-		p.sessionsControl.RLock()
+		p.sessionsControl.Lock()
 		for key, session := range p.sessionsControl.sessions {
 			if time.Since(session.created) > 12*time.Hour {
 				log.Println("Found old session ", key)
 				delete(p.sessionsControl.sessions, key)
 			}
 		}
-		p.sessionsControl.RUnlock()
+		p.sessionsControl.Unlock()
 		log.Println("Old sessions cleander stoped")
 	}
 }
@@ -267,9 +270,21 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 
 	filePath := p.getFileFromCache(p.sosach.Queue[position].Name)
 
+	resp.Header().Add("Accept-Ranges", "bytes")
+	resp.Header().Add("Cache-Control", "public, max-age=16070400")
+
+	rangeHeader := req.Header.Get("Range")
+
+	startRange := 0
+	endRange := 0
+
+	if rangeHeader != "" {
+		startRange, _ = strconv.Atoi(strings.Split(strings.Replace(rangeHeader, "bytes=", "", 1), "-")[0])
+		endRange, _ = strconv.Atoi(strings.Split(strings.Replace(rangeHeader, "bytes=", "", 1), "-")[1])
+	}
+
 	if filePath == "" {
 
-		client := &http.Client{}
 		log.Println(p.Config.DownloadURL+p.sosach.Queue[position].Name, " not in cache, making following request: ", p.Config.BoardAddress+p.sosach.Queue[position].Path)
 
 		outReq, err := http.NewRequest("GET", p.Config.BoardAddress+p.sosach.Queue[position].Path, nil)
@@ -282,16 +297,25 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 		outReq.Header.Set("User-Agent", p.Config.BrowserUserAgent)
 		outReq.AddCookie(&http.Cookie{Name: "__cfduid", Value: p.Config.Cookie})
 
-		//file, err := os.OpenFile(p.Config.SaveDirectory+string(os.PathSeparator)+p.sosach.Queue[0].Name, os.O_WRONLY|os.O_CREATE, 0644)
+		outReq.Header.Add("Range", rangeHeader)
+
+		if req.Header.Get("If-Range") != "" {
+			outReq.Header.Set("If-Range", req.Header.Get("If-Range"))
+		}
+
 		file, err := ioutil.TempFile(p.Config.Tempdir, "webmcache")
 		if err != nil {
 			log.Println("Error on creating temporary file: ", err)
 		}
 		defer file.Close()
+		defer os.Remove(file.Name())
 
 		log.Println("Created temporary file ", file.Name())
 
-		outerResp, err := client.Do(outReq)
+		outerResp, err := http.DefaultClient.Do(outReq)
+
+		log.Println("Get response ", outerResp.StatusCode, "with rangeHeader", rangeHeader)
+
 		if err != nil {
 			log.Println("Error on doing outgoing reqeuest: ", err)
 		}
@@ -300,15 +324,25 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 
 		resp.Header().Add("Last-Modified", outerResp.Header.Get("Last-Modified"))
 		resp.Header().Add("Expires", time.Now().Add(8760*time.Hour).Format(time.RFC1123))
-		resp.Header().Add("Cache-Control", "public, max-age=16070400")
+		resp.Header().Add("Content-Length", outerResp.Header.Get("Content-Length"))
+		if outerResp.Header.Get("Content-Range") != "" {
+			resp.Header().Add("Content-Range", outerResp.Header.Get("Content-Range"))
+		}
+		resp.Header().Add("ETag", outerResp.Header.Get("ETag"))
+		resp.WriteHeader(outerResp.StatusCode)
 
-		multiWrite := io.MultiWriter(file, resp)
+		bytesCount := int64(0)
 
-		bytesCount, err := io.Copy(multiWrite, outerResp.Body)
+		if startRange == 0 && endRange == 0 {
+			bytesCount, err = io.Copy(io.MultiWriter(file, resp), outerResp.Body)
+		} else {
+			log.Println("No file in cache and have request with non-zero start range. Proxying from origin")
+			bytesCount, err = io.Copy(resp, outerResp.Body)
+		}
+
 		if err != nil {
 			log.Println("Error while downloading/uploading: ", err)
-			os.Remove(file.Name())
-		} else {
+		} else if startRange == 0 && endRange == 0 {
 
 			// Check if cache directory exist and create it not. If indicated path is file istead of directory, show alert and stop
 			dir, err := os.Stat(p.Config.SaveDirectory + string(os.PathSeparator) + "src" + string(os.PathSeparator) + p.sosach.Queue[position].Thread)
@@ -317,7 +351,6 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 				err := os.MkdirAll(p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread, 0755)
 				if err != nil {
 					log.Println("Could not create cache directory: ", err)
-					os.Remove(file.Name())
 				} else {
 					log.Println("Creating new directory ", p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread)
 					dir, _ = os.Stat(p.Config.SaveDirectory + string(os.PathSeparator) + "src" + string(os.PathSeparator) + p.sosach.Queue[position].Thread)
@@ -326,7 +359,6 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 
 			if !dir.IsDir() {
 				log.Println("Error during save file to cache: indicated path not a directory.")
-				os.Remove(file.Name())
 			} else {
 				err = os.Rename(file.Name(), p.Config.SaveDirectory+string(os.PathSeparator)+"src"+string(os.PathSeparator)+p.sosach.Queue[position].Thread+string(os.PathSeparator)+p.sosach.Queue[position].Name)
 				if err != nil {
@@ -372,9 +404,33 @@ func (p *HTTPPlayer) servePlay(resp http.ResponseWriter, req *http.Request) {
 		}
 
 		resp.Header().Add("Expires", time.Now().Add(8760*time.Hour).Format(time.RFC1123))
-		resp.Header().Add("Cache-Control", "public, max-age=16070400")
+		bytesCount := int64(0)
+		fileSize := fileStat.Size()
+		if startRange == 0 {
+			resp.Header().Add("Content-Length", strconv.FormatInt(fileSize, 10))
+			resp.Header().Add("Content-Range", "bytes "+strconv.Itoa(startRange)+"-"+strconv.FormatInt(fileSize-1, 10)+"/"+strconv.FormatInt(fileSize, 10))
 
-		bytesCount, err := io.Copy(resp, file)
+			bytesCount, err = io.Copy(resp, file)
+
+		} else {
+			if endRange == 0 {
+				resp.Header().Add("Content-Length", strconv.FormatInt(fileStat.Size()-int64(startRange)+1, 10))
+				resp.Header().Add("Content-Range", "bytes "+strconv.Itoa(startRange)+"-"+strconv.FormatInt(fileSize-int64(startRange)-1, 10)+"/"+strconv.FormatInt(fileSize, 10))
+
+				section := io.NewSectionReader(file, int64(startRange), int64(fileSize-int64(startRange)+1))
+
+				bytesCount, err = io.Copy(resp, section)
+
+			} else {
+				resp.Header().Add("Content-Length", strconv.Itoa(endRange-startRange))
+				resp.Header().Add("Content-Range", "bytes "+strconv.Itoa(startRange)+"-"+strconv.Itoa(endRange)+"/"+strconv.FormatInt(fileSize, 10))
+
+				section := io.NewSectionReader(file, int64(startRange), int64(endRange-startRange+1))
+
+				bytesCount, err = io.Copy(resp, section)
+
+			}
+		}
 		if err != nil {
 			log.Println("Error while uploading: ", err)
 		}
@@ -456,6 +512,34 @@ func (p *HTTPPlayer) ListenAndServe() error {
 		  </style>
 		</head>
 		<body class="black">
+		<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function (d, w, c) {
+        (w[c] = w[c] || []).push(function() {
+            try {
+                w.yaCounter40905979 = new Ya.Metrika({
+                    id:40905979,
+                    clickmap:true,
+                    trackLinks:true,
+                    accurateTrackBounce:true
+                });
+            } catch(e) { }
+        });
+
+        var n = d.getElementsByTagName("script")[0],
+            s = d.createElement("script"),
+            f = function () { n.parentNode.insertBefore(s, n); };
+        s.type = "text/javascript";
+        s.async = true;
+        s.src = "https://mc.yandex.ru/metrika/watch.js";
+
+        if (w.opera == "[object Opera]") {
+            d.addEventListener("DOMContentLoaded", f, false);
+        } else { f(); }
+    })(document, window, "yandex_metrika_callbacks");
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/40905979" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
 		<div id="header">
 		<h1>SaaS - Sosach as a Service</h1>
 		<h3>Endless webm flow from 2ch.hk in your browser</h3>
@@ -528,7 +612,7 @@ func (p *HTTPPlayer) ListenAndServe() error {
 			setTimeout(loadXMLDoc("hidden","/play/info",updateVideoInfo),1500)
 			window.addEventListener('keypress', keyPressHandler, false); 
 			document.getElementById('video_player').addEventListener('ended',function (e) {playNext();},false); 
-			document.getElementById('video_player').addEventListener('error',function (e) {playNext();},false)
+			document.getElementById('video_player').addEventListener('error',function (e) {playNext();},false);
 			}); 
 			</script>`
 		io.WriteString(resp, pageContent)
